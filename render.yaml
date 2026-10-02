@@ -1,0 +1,36 @@
+# Render Blueprint: deploys the support agent as one free web service.
+services:
+  - type: web
+    name: ai-support-agent
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: PORT
+        value: "8000"
+      - key: ENVIRONMENT
+        value: production
+      - key: LLM_PROVIDER
+        value: groq
+      - key: LLM_FALLBACK_PROVIDERS
+        value: mock
+      - key: EMBEDDING_PROVIDER
+        value: hashing
+      - key: VECTOR_BACKEND
+        value: memory
+      - key: SEED_DEMO_DATA
+        value: "true"
+      - key: RATE_LIMIT_PER_MINUTE
+        value: "20"
+      - key: LOG_LEVEL
+        value: INFO
+      # Secrets: Render asks you for these when you deploy
+      - key: GROQ_API_KEY
+        sync: false
+      - key: API_KEYS
+        sync: false
+      - key: PUBLIC_DEMO_CLIENT_KEY
+        sync: false
