@@ -1,0 +1,5 @@
+subject,product,resolution
+Thermostat shows E42 error,Thermostat Gen 2,"E42 means the heating system did not respond. Check that the breaker is on and the furnace door is closed, then restart the thermostat."
+Sensor not detected after battery change,Room Sensor,"Remove the battery for 30 seconds, reinsert it and hold the sensor next to the thermostat to re-pair."
+Schedule runs one hour late,Thermostat Gen 2,"The home time zone was wrong. Fix it in Profile > Home > Time zone; schedules update within a minute."
+Smart plug clicks but device does not turn on,Smart Plug,"The connected device's own switch was off. Leave the appliance switch on and control power from the plug."

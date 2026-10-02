@@ -1,0 +1,7 @@
+apiVersion: 1
+providers:
+  - name: support-agent
+    folder: AI Support Agent
+    type: file
+    options:
+      path: /var/lib/grafana/dashboards

@@ -1,0 +1,14 @@
+fastapi==0.142.2
+uvicorn[standard]==0.54.0
+pydantic==2.13.5
+pydantic-settings==2.15.0
+SQLAlchemy==2.1.1
+psycopg[binary]==3.3.6
+redis==8.1.0
+qdrant-client==1.19.1
+numpy==2.4.4
+openai==3.22.1
+httpx==0.28.1
+prometheus-client==0.26.0
+PyYAML==6.0.3
+python-multipart==0.0.32

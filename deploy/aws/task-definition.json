@@ -1,0 +1,49 @@
+{
+  "family": "ai-support-agent",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "1024",
+  "memory": "2048",
+  "executionRoleArn": "arn:aws:iam::<ACCOUNT_ID>:role/ai-support-agent-execution",
+  "taskRoleArn": "arn:aws:iam::<ACCOUNT_ID>:role/ai-support-agent-task",
+  "runtimePlatform": { "cpuArchitecture": "X86_64", "operatingSystemFamily": "LINUX" },
+  "containerDefinitions": [
+    {
+      "name": "api",
+      "image": "<REPLACED_BY_CI>",
+      "essential": true,
+      "portMappings": [{ "containerPort": 8000, "protocol": "tcp" }],
+      "environment": [
+        { "name": "ENVIRONMENT", "value": "production" },
+        { "name": "VECTOR_BACKEND", "value": "qdrant" },
+        { "name": "LLM_PROVIDER", "value": "groq" },
+        { "name": "LLM_FALLBACK_PROVIDERS", "value": "gemini" },
+        { "name": "EMBEDDING_PROVIDER", "value": "gemini" },
+        { "name": "SEED_DEMO_DATA", "value": "false" },
+        { "name": "RATE_LIMIT_PER_MINUTE", "value": "120" }
+      ],
+      "secrets": [
+        { "name": "DATABASE_URL", "valueFrom": "arn:aws:secretsmanager:<REGION>:<ACCOUNT_ID>:secret:support-agent/database-url" },
+        { "name": "REDIS_URL", "valueFrom": "arn:aws:secretsmanager:<REGION>:<ACCOUNT_ID>:secret:support-agent/redis-url" },
+        { "name": "QDRANT_URL", "valueFrom": "arn:aws:secretsmanager:<REGION>:<ACCOUNT_ID>:secret:support-agent/qdrant-url" },
+        { "name": "GROQ_API_KEY", "valueFrom": "arn:aws:secretsmanager:<REGION>:<ACCOUNT_ID>:secret:support-agent/groq-api-key" },
+        { "name": "GEMINI_API_KEY", "valueFrom": "arn:aws:secretsmanager:<REGION>:<ACCOUNT_ID>:secret:support-agent/gemini-api-key" },
+        { "name": "API_KEYS", "valueFrom": "arn:aws:secretsmanager:<REGION>:<ACCOUNT_ID>:secret:support-agent/api-keys" },
+        { "name": "SLACK_SIGNING_SECRET", "valueFrom": "arn:aws:secretsmanager:<REGION>:<ACCOUNT_ID>:secret:support-agent/slack-signing-secret" },
+        { "name": "SLACK_BOT_TOKEN", "valueFrom": "arn:aws:secretsmanager:<REGION>:<ACCOUNT_ID>:secret:support-agent/slack-bot-token" }
+      ],
+      "healthCheck": {
+        "command": ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""],
+        "interval": 15, "timeout": 5, "retries": 3, "startPeriod": 30
+      },
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/ai-support-agent",
+          "awslogs-region": "<REGION>",
+          "awslogs-stream-prefix": "api"
+        }
+      }
+    }
+  ]
+}

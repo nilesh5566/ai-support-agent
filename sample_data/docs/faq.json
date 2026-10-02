@@ -1,0 +1,14 @@
+{
+  "faqs": [
+    {"question": "Does Acme work with Alexa and Google Home?",
+     "answer": "Yes. Enable the Acme skill in the Alexa app or link Acme in Google Home under Works with Google. Matter devices can also be added directly through the Hub Pro."},
+    {"question": "Do I need a C-wire for the thermostat?",
+     "answer": "A C-wire is recommended. If your system has no C-wire, use the Power Adapter Kit included in the box."},
+    {"question": "Can I share access with family members?",
+     "answer": "Yes. Go to Profile > Home > Members and invite up to 10 people by email. Members can control devices but cannot change billing."},
+    {"question": "How do I delete my account?",
+     "answer": "Go to Profile > Privacy > Delete account. Deletion is permanent after 30 days. Active subscriptions are cancelled automatically."},
+    {"question": "Is my data encrypted?",
+     "answer": "Yes. Data is encrypted in transit with TLS 1.2+ and at rest with AES-256. We never sell personal data."}
+  ]
+}

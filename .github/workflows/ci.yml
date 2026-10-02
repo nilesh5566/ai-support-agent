@@ -1,0 +1,104 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12", cache: pip }
+      - run: pip install -r requirements-dev.txt
+      - run: ruff check .
+
+  test:
+    # Same suite twice: lightweight in-process backends, and real PostgreSQL + Redis.
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        backend: [sqlite-inmemory, postgres-redis]
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env: { POSTGRES_USER: support, POSTGRES_PASSWORD: support, POSTGRES_DB: support }
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U support" --health-interval 5s --health-timeout 3s --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 3s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12", cache: pip }
+      - run: pip install -r requirements-dev.txt
+      - name: Run tests
+        env:
+          TEST_DATABASE_URL: ${{ matrix.backend == 'postgres-redis' && 'postgresql+psycopg://support:support@localhost:5432/support' || '' }}
+          TEST_REDIS_URL: ${{ matrix.backend == 'postgres-redis' && 'redis://localhost:6379/0' || '' }}
+        run: pytest -v
+
+  docker:
+    needs: [lint, test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: Build image
+        run: docker build -t ai-support-agent:ci .
+      - name: Smoke test container
+        run: |
+          docker run -d --name agent -p 8000:8000 ai-support-agent:ci
+          pip install httpx
+          python scripts/smoke_test.py --url http://localhost:8000 --wait 90 || (docker logs agent; exit 1)
+      - name: Validate compose file
+        run: docker compose config -q
+
+  deploy:
+    # Enable by setting repository variable AWS_DEPLOY_ENABLED=true plus the vars/secrets below.
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && vars.AWS_DEPLOY_ENABLED == 'true'
+    needs: [docker]
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      id-token: write   # OIDC -> AWS, no long-lived keys
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+      - name: Build and push image
+        id: image
+        env:
+          IMAGE: ${{ steps.ecr.outputs.registry }}/${{ vars.ECR_REPOSITORY }}:${{ github.sha }}
+        run: |
+          docker build -t "$IMAGE" .
+          docker push "$IMAGE"
+          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
+      - id: taskdef
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: deploy/aws/task-definition.json
+          container-name: api
+          image: ${{ steps.image.outputs.image }}
+      - uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.taskdef.outputs.task-definition }}
+          service: ${{ vars.ECS_SERVICE }}
+          cluster: ${{ vars.ECS_CLUSTER }}
+          wait-for-service-stability: true

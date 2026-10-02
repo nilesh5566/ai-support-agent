@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Acme Support Agent console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #17212b; --muted: #5b6875; --line: #d5dde4; --paper: #f3f6f8; --panel: #ffffff;
+    --heat: #c2410c; --cool: #1d5fb8; --ok: #2f7d4f; --bad: #b42318;
+    --font: "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { font: 15px/1.5 var(--font); color: var(--ink); background: var(--paper); display: flex; flex-direction: column; }
+  header { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; padding: 14px 24px; border-bottom: 1px solid var(--line); background: var(--panel); }
+  header h1 { font-size: 17px; font-weight: 600; margin: 0 auto 0 0; letter-spacing: -0.01em; }
+  header label { font-size: 13px; color: var(--muted); display: flex; gap: 6px; align-items: center; }
+  select, input, textarea, button { font: inherit; color: inherit; }
+  select, input { border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; background: #fff; }
+  main { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) 380px; min-height: 0; }
+  #chat { display: flex; flex-direction: column; min-height: 0; }
+  #log { flex: 1; overflow-y: auto; padding: 24px; display: flex; flex-direction: column; gap: 14px; }
+  .msg { max-width: 68ch; padding: 10px 14px; border-radius: 12px; white-space: pre-wrap; word-wrap: break-word; }
+  .user { align-self: flex-end; background: var(--cool); color: #fff; border-bottom-right-radius: 3px; }
+  .bot { align-self: flex-start; background: var(--panel); border: 1px solid var(--line); border-bottom-left-radius: 3px; }
+  .bot.escalated { border-left: 4px solid var(--heat); }
+  .bot .meta { display: block; margin-top: 6px; font-size: 12px; color: var(--muted); }
+  .empty { margin: auto; text-align: center; color: var(--muted); max-width: 44ch; }
+  .empty button { margin: 6px 4px 0; border: 1px solid var(--line); background: var(--panel); border-radius: 999px; padding: 6px 12px; cursor: pointer; }
+  form { display: flex; gap: 10px; padding: 14px 24px 18px; border-top: 1px solid var(--line); background: var(--panel); }
+  textarea { flex: 1; resize: none; border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; min-height: 46px; }
+  form button { border: 0; border-radius: 8px; padding: 0 20px; background: var(--ink); color: #fff; font-weight: 600; cursor: pointer; }
+  form button:disabled { opacity: .5; cursor: wait; }
+  :focus-visible { outline: 2px solid var(--cool); outline-offset: 2px; }
+
+  aside { border-left: 1px solid var(--line); background: var(--panel); overflow-y: auto; padding: 20px; }
+  aside h2 { font-size: 14px; font-weight: 600; margin: 0 0 10px; }
+  aside section + section { margin-top: 24px; }
+  aside p.hint { color: var(--muted); font-size: 13px; margin: 0; }
+  .tool { display: flex; justify-content: space-between; font-size: 13px; padding: 5px 0; border-bottom: 1px dashed var(--line); }
+  .tool .st-ok { color: var(--ok); } .tool .st-error { color: var(--bad); }
+  .src { font-size: 13px; padding: 6px 0; border-bottom: 1px dashed var(--line); }
+  .src b { font-weight: 600; } .src span { color: var(--muted); }
+  /* Trace waterfall: the memorable part — every span of the turn drawn on one timeline */
+  .wf { position: relative; font-size: 12px; }
+  .wf-row { display: grid; grid-template-columns: 120px 1fr; align-items: center; gap: 8px; height: 22px; }
+  .wf-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--muted); }
+  .wf-track { position: relative; height: 10px; background: var(--paper); border-radius: 2px; }
+  .wf-bar { position: absolute; top: 0; height: 10px; border-radius: 2px; background: var(--cool); min-width: 2px; }
+  .wf-bar.llm { background: #6d4fc2; } .wf-bar.tool { background: var(--ok); } .wf-bar.err { background: var(--bad); }
+  .wf-bar.turn { background: var(--ink); opacity: .25; }
+  .badge { display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 999px; background: var(--paper); border: 1px solid var(--line); }
+  .badge.heat { background: #fdeee6; border-color: #f5c3a8; color: var(--heat); }
+  @media (max-width: 860px) { main { grid-template-columns: 1fr; } aside { border-left: 0; border-top: 1px solid var(--line); max-height: 40vh; } }
+  @media (prefers-reduced-motion: no-preference) { .msg { animation: in .18s ease-out; } @keyframes in { from { opacity: 0; transform: translateY(4px); } } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Acme Smart Home support <span id="llmBadge" class="badge" style="font-weight:400;vertical-align:middle" title="Active LLM provider"></span></h1>
+  <label>Signed in as
+    <select id="customer">
+      <option value="">Guest (not signed in)</option>
+      <option value="jane@example.com" selected>Jane Cooper · Pro</option>
+      <option value="marcus@example.com">Marcus Lee · Starter, past due</option>
+      <option value="priya@example.com">Priya Shah · Enterprise</option>
+    </select>
+  </label>
+  <label>API key <input id="apikey" value="dev-client-key" size="15" aria-label="API key"></label>
+  <label><input type="checkbox" id="staff"> Staff mode (admin key)</label>
+</header>
+<main>
+  <div id="chat">
+    <div id="log" aria-live="polite">
+      <div class="empty" id="empty">
+        <p>Ask about a device, your plan, an order or a ticket. The panel on the right shows which tools the agent used and where its answer came from.</p>
+        <div>
+          <button type="button">How do I reset my thermostat?</button>
+          <button type="button">Where is my order?</button>
+          <button type="button">What's the refund policy for annual plans?</button>
+          <button type="button">I want to talk to a human, my sensor is broken</button>
+          <button type="button">What's the status of TCK-DEMO0001?</button>
+        </div>
+      </div>
+    </div>
+    <form id="form">
+      <textarea id="input" rows="1" placeholder="Type a message" aria-label="Message" required></textarea>
+      <button id="send" type="submit">Send</button>
+    </form>
+  </div>
+  <aside>
+    <section><h2>Agent activity</h2><div id="tools"><p class="hint">Tool calls for the latest reply appear here.</p></div></section>
+    <section><h2>Sources</h2><div id="sources"><p class="hint">Documents retrieved for the latest reply.</p></div></section>
+    <section><h2>Trace</h2><div id="trace"><p class="hint">Timing of each step in the latest turn.</p></div></section>
+  </aside>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+let conversationId = null;
+
+function esc(s) { return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+fetch("/health").then(r => r.json()).then(h => {
+  if (h.llm) $("llmBadge").textContent = `${h.llm.provider} · ${h.llm.model}` + (h.llm.chain ? ` (+${h.llm.chain.length - 1} fallback)` : "");
+}).catch(() => {});
+function md(s) { return esc(s).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/_([^_\n]+)_/g, "<i>$1</i>"); }
+
+function add(role, html, extraClass = "") {
+  $("empty")?.remove();
+  const div = document.createElement("div");
+  div.className = `msg ${role} ${extraClass}`;
+  div.innerHTML = html;
+  $("log").appendChild(div);
+  $("log").scrollTop = $("log").scrollHeight;
+  return div;
+}
+
+function renderPanel(d) {
+  $("tools").innerHTML = d.tool_calls.length
+    ? d.tool_calls.map(t => `<div class="tool"><span>${esc(t.name)}${t.enforced_by_policy ? " · policy" : ""}</span><span class="st-${t.status}">${t.status}</span></div>`).join("")
+    : '<p class="hint">No tools were needed.</p>';
+  $("sources").innerHTML = d.sources.length
+    ? d.sources.map(s => `<div class="src"><b>${esc(s.title)}</b><br><span>${esc((s.section || "").split(" > ").pop())} · score ${s.score.toFixed(2)}</span></div>`).join("")
+    : '<p class="hint">No documents were retrieved.</p>';
+  const spans = d.trace?.spans || [];
+  const total = Math.max(...spans.map(s => s.start_offset_ms + s.duration_ms), 1);
+  $("trace").innerHTML = spans.length ? `<div class="wf">${spans.map(s => {
+    const kind = s.status === "error" ? "err" : s.name.startsWith("llm") ? "llm" : s.name.startsWith("tool") ? "tool" : s.name === "agent.turn" ? "turn" : "";
+    return `<div class="wf-row" title="${esc(s.name)} ${s.duration_ms} ms"><span class="wf-name">${esc(s.name)}</span><div class="wf-track"><div class="wf-bar ${kind}" style="left:${(s.start_offset_ms / total) * 100}%;width:${(s.duration_ms / total) * 100}%"></div></div></div>`;
+  }).join("")}</div><p class="hint">${d.latency_ms} ms total · trace ${esc(d.trace_id.slice(0, 12))}</p>` : "";
+}
+
+async function send(text) {
+  const btn = $("send");
+  btn.disabled = true;
+  add("user", esc(text));
+  const staff = $("staff").checked;
+  try {
+    const res = await fetch("/v1/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-API-Key": staff ? "dev-admin-key" : $("apikey").value },
+      body: JSON.stringify({ message: text, conversation_id: conversationId, customer_email: $("customer").value || null,
+                             channel: "web", as_staff: staff, debug: true }),
+    });
+    const d = await res.json();
+    if (!res.ok) throw new Error(typeof d.detail === "string" ? d.detail : JSON.stringify(d.detail));
+    conversationId = d.conversation_id;
+    const meta = d.escalated ? `<span class="meta"><span class="badge heat">Escalated · ${esc(d.ticket_number)}</span></span>`
+               : d.ticket_number ? `<span class="meta"><span class="badge">Ticket ${esc(d.ticket_number)}</span></span>` : "";
+    add("bot", md(d.reply) + meta, d.escalated ? "escalated" : "");
+    renderPanel(d);
+  } catch (err) {
+    add("bot", `Request failed: ${esc(err.message)}. Check the API key and that the server is running.`);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+$("form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const text = $("input").value.trim();
+  if (!text) return;
+  $("input").value = "";
+  send(text);
+});
+$("input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); $("form").requestSubmit(); }
+});
+document.querySelectorAll(".empty button").forEach(b => b.addEventListener("click", () => send(b.textContent)));
+$("customer").addEventListener("change", () => { conversationId = null; $("log").innerHTML = ""; });
+$("staff").addEventListener("change", () => { conversationId = null; });
+</script>
+</body>
+</html>

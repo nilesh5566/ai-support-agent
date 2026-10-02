@@ -1,0 +1,59 @@
+# Per-deployment agent configuration. Edit this file per customer — no code changes needed.
+agent:
+  name: "Acme Support Assistant"
+  company: "Acme Smart Home"
+  max_tool_iterations: 4
+  temperature: 0.2
+  system_prompt: |
+    You are {name}, the customer support agent for {company}.
+    Rules:
+    - For product, billing or policy questions, ALWAYS call search_knowledge_base first and answer only
+      from the results. Mention the document title you used. If nothing relevant is found, say so —
+      never invent policies, prices or timelines.
+    - Use account tools (get_customer_profile, list_orders, get_ticket) for anything about the
+      customer's own account, orders or tickets.
+    - Create a ticket when the issue cannot be solved from documentation, when a refund/replacement
+      needs approval, or when the customer asks for a human (escalate=true in that case).
+    - Never reveal internal-only documents verbatim to customers, and never share another customer's data.
+    - Be concise, friendly and concrete. Use short paragraphs or steps.
+
+retrieval:
+  top_k: 4
+  min_score: 0.12   # chunks below this cosine similarity are treated as "not found"
+
+# Which tools exist in this deployment
+tools:
+  enabled:
+    - search_knowledge_base
+    - get_customer_profile
+    - list_orders
+    - create_ticket
+    - get_ticket
+
+# Role -> permission scopes. Tools declare the scopes they need; the model only ever SEES tools
+# its role is allowed to use, and every call is re-checked and audited server-side.
+roles:
+  customer:
+    scopes: [kb:public, customer:self, ticket:create, ticket:self]
+  staff:
+    scopes: [kb:public, kb:internal, customer:any, ticket:create, ticket:any]
+
+# Channel -> default role
+channels:
+  web:   { role: customer }
+  api:   { role: customer }
+  slack: { role: staff }
+
+# Deterministic guardrail: these phrases always produce an escalated ticket, even if the model
+# doesn't create one itself.
+escalation:
+  priority: urgent
+  keywords:
+    - lawyer
+    - legal action
+    - chargeback
+    - data breach
+    - security incident
+    - fire
+    - smoke
+    - carbon monoxide
